@@ -247,18 +247,3 @@ def ldpc_decode(H:              NDArray,
         curr_step += 1
 
     return DIAGNOSTIC_dict, z
-
-
-H = np.loadtxt("H1.txt")
-y = np.loadtxt("y1.txt")
-
-info, decoded = ldpc_decode(H, y, 0.1, 20)
-
-if info['SUCCESS_CODE'] == 0:
-    print("---- SUCCESSFUL DECODING -----")
-
-    original_msg = bytearray(np.packbits(decoded[:248])).decode().strip("\x00")
-    print(f"decoded message: {original_msg}")
-    print(f"number of iterations needed: {info['NUM_ITER']}")
-else:
-    print("---- unsuccessful decoding -----")
