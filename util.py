@@ -171,7 +171,8 @@ def ldpc_decode(H:              NDArray,
     
     '''
     LDPC decoder which uses the Loopy Belief Propagation (LBP) algorithm on a graph defined by the parity check matrix H
-    to decode a recieved string of coded bits through a noisy channel with noise ratio p (binary {0,1} random variables)
+    to decode a recieved string of coded bits through a noisy channel with noise ratio p (binary {0,1} random variables).
+    Algorithm follows procedure in Shokrollahi - LDPC Codes: An introduction.
 
     Params
     ----------------------
