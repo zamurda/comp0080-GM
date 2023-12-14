@@ -148,17 +148,20 @@ def _bit_to_check(col: NDArray, nbrs: NDArray) -> NDArray:
     For each edge (nonzero element in the column) the msg is the
     sum of all other nonzero elements apart from that one (- a constant)
     '''
-    for nbr in nbrs:
-        col[nbr] = np.sum(col[(nbrs != nbr)])
-    
+    col[nbrs] = np.sum(col[nbrs]) - col[nbrs]
+
     return col
 
-def _check_to_bit(row: NDArray, nbrs: dict) -> NDArray:
+def _check_to_bit(row: NDArray, nbrs: NDArray) -> NDArray:
     '''
     Returns the row vector of messages passed from a check to neighouring bits
 
     '''
-    pass
+    tanh_prod = np.prod(np.tanh(0.5 * row[nbrs])) / np.tanh(0.5 * row[nbrs], dtype=np.float64)
+    #print(tanh_prod)
+    row[nbrs] = np.log(1 + tanh_prod) -  np.log(1 - tanh_prod)
+
+    return row
     
 
 def ldpc_decode(H:              NDArray,
@@ -192,12 +195,12 @@ def ldpc_decode(H:              NDArray,
     }
 
     # init all data strutures to use in algorithm
-    check_nbrs = { i: np.where(M[i,:] == 1)[0] for i in range(M.shape[0]) } # stores non-zero indexes of each ROW as a key,value pair
-    bit_nbrs = { j: np.where(M[:,j] == 1)[0] for j in range(M.shape[1]) } # stores non-zero indexes of each COLUMN as a key,value pair
+    check_nbrs = { i: np.where(H[i,:] != 0)[0] for i in range(H.shape[0]) } # stores non-zero indexes of each ROW as a key,value pair
+    bit_nbrs = { j: np.where(H[:,j] != 0)[0] for j in range(H.shape[1]) } # stores non-zero indexes of each COLUMN as a key,value pair
     z = y # store coding
 
     # Deep copy p-check matrix to avoid editing in-place
-    M = np.copy(H)
+    M = np.copy(H).astype(np.float64)
 
     # init messages (v -> c)
     # if node is 0
@@ -208,9 +211,9 @@ def ldpc_decode(H:              NDArray,
     # if node is 1
     bits_1 = np.where(y == 1)[0]
     for j in bits_1:
-        M[j,:][bit_nbrs[j]] = np.log(noise_ratio) - np.log(1-noise_ratio)
+        M[:,j][bit_nbrs[j]] = np.log(noise_ratio) - np.log(1-noise_ratio)
     
-    init_messages = np.copy(M) # need to add initial message to v -> c messages
+    init_messages = np.copy(M).astype(np.float64) # need to add initial message to v -> c messages
 
     # DONT NEED ANYMORE
     # Add a layer of indices to the messages matrix M so that apply_along axes knows exactly which col or row it is in
@@ -220,24 +223,42 @@ def ldpc_decode(H:              NDArray,
     # set up loop
     curr_step = 1
     while curr_step <= max_iter:
-        DIAGNOSTIC_dict['NUM_ITER'] = curr_step
+
+        # check -> bit updates (rows), 
+        for i in range(M.shape[0]):
+            M[i,:] = _check_to_bit(M[i,:], check_nbrs[i])
+        
+        # generate coding
+        z = np.where(np.sum(M, axis=0) < 0, 1, 0)
 
         # break condition if we get the right code
-        if (np.all(H @ z % 2 == 0)):
+        if np.all((H @ z) % 2 == 0):
             DIAGNOSTIC_dict['SUCCESS_CODE'] = 0
             break
 
-        # c -> v updates, 
-        for i in range(M.shape[0]):
-            pass
+        DIAGNOSTIC_dict['NUM_ITER'] = curr_step
+        print(f'currently on step {curr_step}')
 
-        # v -> c updates, 
+        # bit -> check updates (columns), 
         for i in range(M.shape[1]):
-            pass
+            M[:,i] = _bit_to_check(M[:,i], bit_nbrs[i]) + init_messages[:,i]
 
 
-        # TODO: generate coding
-        
         curr_step += 1
 
     return DIAGNOSTIC_dict, z
+
+
+H = np.loadtxt("H1.txt")
+y = np.loadtxt("y1.txt")
+
+info, decoded = ldpc_decode(H, y, 0.1, 20)
+
+if info['SUCCESS_CODE'] == 0:
+    print("---- SUCCESSFUL DECODING -----")
+
+    original_msg = bytearray(np.packbits(decoded[:248])).decode().strip("\x00")
+    print(f"decoded message: {original_msg}")
+    print(f"number of iterations needed: {info['NUM_ITER']}")
+else:
+    print("---- unsuccessful decoding -----")
