@@ -1,5 +1,6 @@
 import numpy as np
 from numpy.typing import NDArray
+from typing import Tuple
 
 def GF2_row_echelon(H: NDArray) -> NDArray:
     '''
@@ -97,7 +98,7 @@ def GF2_rref(H: NDArray) -> NDArray:
     return H
         
 
-def generate_encoder(H: NDArray) -> tuple(NDArray, NDArray):
+def generate_encoder(H: NDArray) -> Tuple[NDArray, NDArray]:
     '''
     builds a systematic encoding matric given a parity check matrix H,
     by computing the echelon form, and permuting until the standard form is acheived
@@ -139,17 +140,23 @@ def generate_encoder(H: NDArray) -> tuple(NDArray, NDArray):
     return H, G
 
 
-def _bit_to_check(col: NDArray, *args: dict) -> NDArray:
+def _bit_to_check(col: NDArray, nbrs: NDArray) -> NDArray:
     '''
-    Returns the column vector of messages passed from a bit to neighouring checks
-    To be used with numpy.apply_along_axis
+    Given a column of edges between a bit and neighbouring checks,
+    returns the column vector of messages passed from the bit.
+    
+    For each edge (nonzero element in the column) the msg is the
+    sum of all other nonzero elements apart from that one (- a constant)
     '''
-    pass
+    for nbr in nbrs:
+        col[nbr] = np.sum(col[(nbrs != nbr)])
+    
+    return col
 
-def _check_to_bit(row: NDArray, *args: dict) -> NDArray:
+def _check_to_bit(row: NDArray, nbrs: dict) -> NDArray:
     '''
     Returns the row vector of messages passed from a check to neighouring bits
-    To be used with numpy.apply_along_axis
+
     '''
     pass
     
@@ -157,7 +164,7 @@ def _check_to_bit(row: NDArray, *args: dict) -> NDArray:
 def ldpc_decode(H:              NDArray,
                 y:              NDArray,
                 noise_ratio:    float,
-                max_iter:       int = 20) -> tuple(int, NDArray):
+                max_iter:       int = 20) -> Tuple[dict, NDArray]:
     
     '''
     LDPC decoder which uses the Loopy Belief Propagation (LBP) algorithm on a graph defined by the parity check matrix H
@@ -177,34 +184,60 @@ def ldpc_decode(H:              NDArray,
                                 'NUM_ITER': current iteration}
     x:NDarray           - the decoded string on the last iteration
     '''
+
     # init info dict
     DIAGNOSTIC_dict = {
         'SUCCESS_CODE': -1,
         'NUM_ITER': 1
     }
 
-    # TODO: init all data strutures to use in algorithm
-    check_nbrs = {}
-    bit_nbrs = {}
-    z = None # store coding
+    # init all data strutures to use in algorithm
+    check_nbrs = { i: np.where(M[i,:] == 1)[0] for i in range(M.shape[0]) } # stores non-zero indexes of each ROW as a key,value pair
+    bit_nbrs = { j: np.where(M[:,j] == 1)[0] for j in range(M.shape[1]) } # stores non-zero indexes of each COLUMN as a key,value pair
+    z = y # store coding
 
-    # TODO: init messages (v -> c) 
+    # Deep copy p-check matrix to avoid editing in-place
+    M = np.copy(H)
+
+    # init messages (v -> c)
+    # if node is 0
+    bits_0 = np.where(y == 0)[0]
+    for i in bits_0:
+        M[:,i][bit_nbrs[i]] = np.log(1-noise_ratio) - np.log(noise_ratio)
+
+    # if node is 1
+    bits_1 = np.where(y == 1)[0]
+    for j in bits_1:
+        M[j,:][bit_nbrs[j]] = np.log(noise_ratio) - np.log(1-noise_ratio)
+    
+    init_messages = np.copy(M) # need to add initial message to v -> c messages
+
+    # DONT NEED ANYMORE
+    # Add a layer of indices to the messages matrix M so that apply_along axes knows exactly which col or row it is in
+    #M = np.c_[np.arange(M.shape[0]), M]
+    #M = np.r_[np.arange(M.shape[1])[np.newaxis,:] - 1, M] # -1 offset is so that the first entry of every col is the TRUE COL IDX
 
     # set up loop
     curr_step = 1
     while curr_step <= max_iter:
         DIAGNOSTIC_dict['NUM_ITER'] = curr_step
 
-        # TODO: c -> v updates
-        # TODO: v -> c updates
-
-
-        # TODO: generate coding
         # break condition if we get the right code
         if (np.all(H @ z % 2 == 0)):
             DIAGNOSTIC_dict['SUCCESS_CODE'] = 0
             break
+
+        # c -> v updates, 
+        for i in range(M.shape[0]):
+            pass
+
+        # v -> c updates, 
+        for i in range(M.shape[1]):
+            pass
+
+
+        # TODO: generate coding
         
         curr_step += 1
 
-    return DIAGNOSTIC_dict, None
+    return DIAGNOSTIC_dict, z
