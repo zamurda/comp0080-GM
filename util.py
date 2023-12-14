@@ -191,7 +191,7 @@ def ldpc_decode(H:              NDArray,
     # init info dict
     DIAGNOSTIC_dict = {
         'SUCCESS_CODE': -1,
-        'NUM_ITER': 1
+        'NUM_ITER': 0
     }
 
     # init all data strutures to use in algorithm
@@ -221,12 +221,15 @@ def ldpc_decode(H:              NDArray,
     #M = np.r_[np.arange(M.shape[1])[np.newaxis,:] - 1, M] # -1 offset is so that the first entry of every col is the TRUE COL IDX
 
     # set up loop
-    curr_step = 1
+    curr_step = 0
     while curr_step <= max_iter:
 
         # check -> bit updates (rows), 
         for i in range(M.shape[0]):
             M[i,:] = _check_to_bit(M[i,:], check_nbrs[i])
+        
+        curr_step += 1
+        DIAGNOSTIC_dict['NUM_ITER'] = curr_step
         
         # generate coding
         z = np.where(np.sum(M, axis=0) < 0, 1, 0)
@@ -236,14 +239,11 @@ def ldpc_decode(H:              NDArray,
             DIAGNOSTIC_dict['SUCCESS_CODE'] = 0
             break
 
-        DIAGNOSTIC_dict['NUM_ITER'] = curr_step
-        print(f'currently on step {curr_step}')
+        
 
         # bit -> check updates (columns), 
         for i in range(M.shape[1]):
             M[:,i] = _bit_to_check(M[:,i], bit_nbrs[i]) + init_messages[:,i]
 
-
-        curr_step += 1
 
     return DIAGNOSTIC_dict, z
