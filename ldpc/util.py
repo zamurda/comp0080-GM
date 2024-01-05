@@ -216,10 +216,6 @@ def ldpc_decode(H:              NDArray,
     
     init_messages = np.copy(M).astype(np.float64) # need to add initial message to v -> c messages
 
-    # DONT NEED ANYMORE
-    # Add a layer of indices to the messages matrix M so that apply_along axes knows exactly which col or row it is in
-    #M = np.c_[np.arange(M.shape[0]), M]
-    #M = np.r_[np.arange(M.shape[1])[np.newaxis,:] - 1, M] # -1 offset is so that the first entry of every col is the TRUE COL IDX
 
     # set up loop
     curr_step = 0
@@ -238,11 +234,9 @@ def ldpc_decode(H:              NDArray,
         # break condition if we get the right code
         if np.all((H @ z) % 2 == 0):
             DIAGNOSTIC_dict['SUCCESS_CODE'] = 0
-            break
+            break      
 
-        
-
-        # bit -> check updates (columns), 
+        # bit -> check updates (columns), remembering to add the constant
         for i in range(M.shape[1]):
             M[:,i] = _bit_to_check(M[:,i], bit_nbrs[i]) + init_messages[:,i]
 
